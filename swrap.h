@@ -15,6 +15,13 @@ swrap supports the following three configurations:
     Must be defined in exactly one source file within a project for swrap to be found by the linker.
 #define SWRAP_STATIC
     Defines all swrap functions as static, useful if swrap is only used in a single compilation unit.
+
+swrap usage:
+    The swrapInit and swrapTerminate function need to be called at program start/end for swrap to work on all platforms.
+    Calling swrapSocket returns a new socket handle configured according to given parameters (or -1 on failure), which
+    is then used as an argument in most other swrap functions. See comments in the actual code for specific details.
+    While swrap abstracts away a few things (especially platform-specifics) it largely mirrors the socket API,
+    therefore at least a basic understanding of the socket API is strongly recommended for anyone using swrap.
 */
 
 //include only once
@@ -51,13 +58,13 @@ SWDEF void swrapTerminate();
 SWDEF int swrapListen(int, int);
 SWDEF int swrapAccept(int, struct swrap_addr*);
 SWDEF int swrapAddress(int, struct swrap_addr*);
-SWDEF int swrapAddressInfo(struct swrap_addr*, char*, size_t, char*, size_t);
-SWDEF int swrapSend(int, char*, size_t);
-SWDEF int swrapReceive(int, char*, size_t);
-SWDEF int swrapSendTo(int, struct swrap_addr*, char*, size_t);
-SWDEF int swrapReceiveFrom(int, struct swrap_addr*, char*, size_t);
+SWDEF int swrapAddressInfo(struct swrap_addr*, char*, int, char*, int);
+SWDEF int swrapSend(int, char*, int);
+SWDEF int swrapReceive(int, char*, int);
+SWDEF int swrapSendTo(int, struct swrap_addr*, char*, int);
+SWDEF int swrapReceiveFrom(int, struct swrap_addr*, char*, int);
 SWDEF int swrapSelect(int, double);
-SWDEF int swrapMultiSelect(int*, size_t, double);
+SWDEF int swrapMultiSelect(int*, int, double);
 
 //implementation section
 #ifdef SWRAP_IMPLEMENTATION
@@ -212,41 +219,37 @@ SWDEF int swrapAddress (int sock, struct swrap_addr* addr) {
     #endif
     return getsockname(sock, (struct sockaddr*)addr, &addr_size);
 }
-SWDEF int swrapAddressInfo (struct swrap_addr* addr, char* host, size_t host_size, char* serv, size_t serv_size) {
+SWDEF int swrapAddressInfo (struct swrap_addr* addr, char* host, int host_size, char* serv, int serv_size) {
     //writes the host/address and service/port of given address into given buffers (pointer + size), either buffer may be NULL
     //returns 0 on success, non-zero on failure
     return getnameinfo((struct sockaddr*)addr, sizeof(struct swrap_addr), host, host_size, serv, serv_size, 0);
 }
 
 //send/receive functions
-SWDEF int swrapSend (int sock, char* data, size_t data_size) {
+SWDEF int swrapSend (int sock, char* data, int data_size) {
     //uses the given socket (either SWRAP_CONNECT or returned by swrapAccept) to send given data (pointer + size)
-    //at most INT_MAX bytes of data will be sent, data sizes greater than that are clamped to INT_MAX
     //returns how much data was actually sent (may be less than data size), or -1 on failure
-    return send(sock, data, (data_size > INT_MAX) ? INT_MAX : data_size, 0);
+    return send(sock, data, data_size, 0);
 }
-SWDEF int swrapReceive (int sock, char* data, size_t data_size) {
+SWDEF int swrapReceive (int sock, char* data, int data_size) {
     //receives data using given socket (either SWRAP_CONNECT or returned by swrapAccept) into given buffer (pointer + size)
-    //at most INT_MAX bytes of data will be received, buffer sizes greater than INT_MAX have no additional benefit
     //returns the number of bytes received, 0 on orderly shutdown, or -1 on failure (e.g. no data to receive)
-    return recv(sock, data, (data_size > INT_MAX) ? INT_MAX : data_size, 0);
+    return recv(sock, data, data_size, 0);
 }
-SWDEF int swrapSendTo (int sock, struct swrap_addr* addr, char* data, size_t data_size) {
+SWDEF int swrapSendTo (int sock, struct swrap_addr* addr, char* data, int data_size) {
     //uses the given socket to send given data (pointer + size) to the given swrap_addr (e.g. from swrapReceiveFrom)
-    //at most INT_MAX bytes of data will be sent, data sizes greater than that are clamped to INT_MAX
     //returns how much data was actually sent (may be less than data size), or -1 on failure
-    return sendto(sock, data, (data_size > INT_MAX) ? INT_MAX : data_size, 0, (struct sockaddr*)addr, sizeof(struct swrap_addr));
+    return sendto(sock, data, data_size, 0, (struct sockaddr*)addr, sizeof(struct swrap_addr));
 }
-SWDEF int swrapReceiveFrom (int sock, struct swrap_addr* addr, char* data, size_t data_size) {
+SWDEF int swrapReceiveFrom (int sock, struct swrap_addr* addr, char* data, int data_size) {
     //receives data using given socket into given buffer (pointer + size), optionally returning sender's address
-    //at most INT_MAX bytes of data will be received, buffer sizes greater than INT_MAX have no additional benefit
     //returns the number of bytes received, 0 on orderly shutdown, or -1 on failure (e.g. no data to receive)
     #ifdef _WIN32
         int addr_size = sizeof(struct swrap_addr);
     #else
         socklen_t addr_size = sizeof(struct swrap_addr);
     #endif
-    return recvfrom(sock, data, (data_size > INT_MAX) ? INT_MAX : data_size, 0, (struct sockaddr*)addr, &addr_size);
+    return recvfrom(sock, data, data_size, 0, (struct sockaddr*)addr, &addr_size);
 }
 
 //select functions
@@ -264,14 +267,14 @@ SWDEF int swrapSelect (int sock, double timeout) {
     //return
     return select(sock+1, &set, NULL, NULL, &time);
 }
-SWDEF int swrapMultiSelect (int* socks, size_t socks_size, double timeout) {
+SWDEF int swrapMultiSelect (int* socks, int socks_size, double timeout) {
     //waits either until a socket in given list has new data to receive or given time (in seconds) has passed
     //if the given list length is 0 an empty select will be performed, which is just a sub-second sleep
     //returns 1 or more if new data is available, 0 if timeout was reached, and -1 on error
     fd_set set; struct timeval time; int sock_max = -1;
     //fd set
     FD_ZERO(&set);
-    for (size_t i = 0; i < socks_size; i++) {
+    for (int i = 0; i < socks_size; i++) {
         if (socks[i] > sock_max) sock_max = socks[i];
         if (socks[i] > -1) FD_SET(socks[i], &set);
     }
