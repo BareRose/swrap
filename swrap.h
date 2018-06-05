@@ -52,16 +52,16 @@ struct swrap_addr {
 
 //function declarations
 SWDEF int swrapInit();
-SWDEF int swrapSocket(int, int, char, char*, char*);
+SWDEF int swrapSocket(int, int, char, const char*, const char*);
 SWDEF void swrapClose(int);
 SWDEF void swrapTerminate();
 SWDEF int swrapListen(int, int);
 SWDEF int swrapAccept(int, struct swrap_addr*);
 SWDEF int swrapAddress(int, struct swrap_addr*);
 SWDEF int swrapAddressInfo(struct swrap_addr*, char*, int, char*, int);
-SWDEF int swrapSend(int, char*, int);
+SWDEF int swrapSend(int, const char*, int);
 SWDEF int swrapReceive(int, char*, int);
-SWDEF int swrapSendTo(int, struct swrap_addr*, char*, int);
+SWDEF int swrapSendTo(int, struct swrap_addr*, const char*, int);
 SWDEF int swrapReceiveFrom(int, struct swrap_addr*, char*, int);
 SWDEF int swrapSelect(int, double);
 SWDEF int swrapMultiSelect(int*, int, double);
@@ -90,7 +90,7 @@ SWDEF int swrapInit () {
         return 0;
     #endif
 }
-SWDEF int swrapSocket (int prot, int mode, char flags, char* host, char* serv) {
+SWDEF int swrapSocket (int prot, int mode, char flags, const char* host, const char* serv) {
     //protocol-agnostically creates a new socket configured according to the given parameters
     //sockets have to be created and bound/connected all at once to allow for protocol-agnosticity
     //int: Protocol of the socket, either SWRAP_TCP or SWRAP_UDP for TCP or UDP respectively
@@ -226,7 +226,7 @@ SWDEF int swrapAddressInfo (struct swrap_addr* addr, char* host, int host_size, 
 }
 
 //send/receive functions
-SWDEF int swrapSend (int sock, char* data, int data_size) {
+SWDEF int swrapSend (int sock, const char* data, int data_size) {
     //uses the given socket (either SWRAP_CONNECT or returned by swrapAccept) to send given data (pointer + size)
     //returns how much data was actually sent (may be less than data size), or -1 on failure
     return send(sock, data, data_size, 0);
@@ -236,7 +236,7 @@ SWDEF int swrapReceive (int sock, char* data, int data_size) {
     //returns the number of bytes received, 0 on orderly shutdown, or -1 on failure (e.g. no data to receive)
     return recv(sock, data, data_size, 0);
 }
-SWDEF int swrapSendTo (int sock, struct swrap_addr* addr, char* data, int data_size) {
+SWDEF int swrapSendTo (int sock, struct swrap_addr* addr, const char* data, int data_size) {
     //uses the given socket to send given data (pointer + size) to the given swrap_addr (e.g. from swrapReceiveFrom)
     //returns how much data was actually sent (may be less than data size), or -1 on failure
     return sendto(sock, data, data_size, 0, (struct sockaddr*)addr, sizeof(struct swrap_addr));
