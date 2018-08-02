@@ -16,10 +16,8 @@ swrap supports the following three configurations:
 #define SWRAP_STATIC
     Defines all swrap functions as static, useful if swrap is only used in a single compilation unit.
 
-swrap usage:
+swrap notes:
     The swrapInit and swrapTerminate function need to be called at program start/end for swrap to work on all platforms.
-    Calling swrapSocket returns a new socket handle configured according to given parameters (or -1 on failure), which
-    is then used as an argument in most other swrap functions. See comments in the actual code for specific details.
     While swrap abstracts away a few things (especially platform-specifics) it largely mirrors the socket API,
     therefore at least a basic understanding of the socket API is strongly recommended for anyone using swrap.
 */
@@ -52,19 +50,58 @@ struct swrap_addr {
 
 //function declarations
 SWDEF int swrapInit();
+    //initializes socket functionality, returns 0 on success
 SWDEF int swrapSocket(int, int, char, const char*, const char*);
+    //protocol-agnostically creates a new socket configured according to the given parameters
+    //sockets have to be created and bound/connected all at once to allow for protocol-agnosticity
+    //int: Protocol of the socket, either SWRAP_TCP or SWRAP_UDP for TCP or UDP respectively
+    //  SWRAP_TCP: TCP protocol connection-oriented reliable delivery, see swrapListen/Accept
+    //  SWRAP_UDP: UDP protocol connectionless unreliable, SWRAP_CONNECT just assigns correspondent
+    //int: Mode of the socket
+    //  SWRAP_BIND: Bind to given address (or all interfaces if NULL) and port, e.g. for a server
+    //  SWRAP_CONNECT: Connect to given address (localhost if NULL) and port, e.g. for a client
+    //char: Configuration flags, either SWRAP_DEFAULT or a bitwise combination of flags
+    //  SWRAP_NOBLOCK: Sets the socket to be non-blocking, default is blocking
+    //  SWRAP_NODELAY: Disables Nagle's for TCP sockets, default is enabled
+    //char*: Host/address as a string, can be IPv4, IPv6, etc...
+    //char*: Service/port as a string, e.g. "1728" or "http"
+    //returns socket handle, or -1 on failure
 SWDEF void swrapClose(int);
+    //closes the given socket
 SWDEF void swrapTerminate();
+    //terminates socket functionality
 SWDEF int swrapListen(int, int);
+    //configures the given socket (must be SWRAP_TCP + SWRAP_BIND) to listen for new connections with given backlog
+    //returns 0 on success, non-zero on failure
 SWDEF int swrapAccept(int, struct swrap_addr*);
+    //uses the given socket (must be swrapListen) to accept a new incoming connection, optionally returning its address
+    //returns a socket handle for the new connection, or -1 on failure (e.g. if there are no new connections)
 SWDEF int swrapAddress(int, struct swrap_addr*);
+    //writes the address the given socket is bound to into given address pointer, useful when automatically assigning port
+    //returns 0 on success, non-zero on failure
 SWDEF int swrapAddressInfo(struct swrap_addr*, char*, int, char*, int);
+    //writes the host/address and service/port of given address into given buffers (pointer + size), one buffer may be NULL
+    //returns 0 on success, non-zero on failure
 SWDEF int swrapSend(int, const char*, int);
+    //uses the given socket (either SWRAP_CONNECT or returned by swrapAccept) to send given data (pointer + size)
+    //returns how much data was actually sent (may be less than data size), or -1 on failure
 SWDEF int swrapReceive(int, char*, int);
+    //receives data using given socket (either SWRAP_CONNECT or returned by swrapAccept) into given buffer (pointer + size)
+    //returns the number of bytes received, 0 on orderly shutdown, or -1 on failure (e.g. no data to receive)
 SWDEF int swrapSendTo(int, struct swrap_addr*, const char*, int);
+    //uses the given socket to send given data (pointer + size) to the given swrap_addr (e.g. from swrapReceiveFrom)
+    //returns how much data was actually sent (may be less than data size), or -1 on failure
 SWDEF int swrapReceiveFrom(int, struct swrap_addr*, char*, int);
+    //receives data using given socket into given buffer (pointer + size), optionally returning sender's address
+    //returns the number of bytes received, 0 on orderly shutdown, or -1 on failure (e.g. no data to receive)
 SWDEF int swrapSelect(int, double);
+    //waits either until given socket has new data to receive or given time (in seconds) has passed
+    //if given socket is -1 an empty select will be performed, which is just a sub-second sleep
+    //returns 1 if new data is available, 0 if timeout was reached, and -1 on error
 SWDEF int swrapMultiSelect(int*, int, double);
+    //waits either until a socket in given list has new data to receive or given time (in seconds) has passed
+    //if the given list length is 0 an empty select will be performed, which is just a sub-second sleep
+    //returns 1 or more if new data is available, 0 if timeout was reached, and -1 on error
 
 //implementation section
 #ifdef SWRAP_IMPLEMENTATION
@@ -82,7 +119,6 @@ SWDEF int swrapMultiSelect(int*, int, double);
 
 //general functions
 SWDEF int swrapInit () {
-    //initializes socket functionality, returns 0 on success
     #ifdef _WIN32
         WSADATA WsaData;
         return (WSAStartup(MAKEWORD(2,2), &WsaData) != NO_ERROR);
@@ -91,20 +127,7 @@ SWDEF int swrapInit () {
     #endif
 }
 SWDEF int swrapSocket (int prot, int mode, char flags, const char* host, const char* serv) {
-    //protocol-agnostically creates a new socket configured according to the given parameters
-    //sockets have to be created and bound/connected all at once to allow for protocol-agnosticity
-    //int: Protocol of the socket, either SWRAP_TCP or SWRAP_UDP for TCP or UDP respectively
-    //  SWRAP_TCP: TCP protocol connection-oriented reliable delivery, see swrapListen/Accept
-    //  SWRAP_UDP: UDP protocol connectionless unreliable, SWRAP_CONNECT just assigns correspondent
-    //int: Mode of the socket
-    //  SWRAP_BIND: Bind to given address (or all interfaces if NULL) and port, e.g. for a server
-    //  SWRAP_CONNECT: Connect to given address (localhost if NULL) and port, e.g. for a client
-    //char: Configuration flags, either SWRAP_DEFAULT or a bitwise combination of flags
-    //  SWRAP_NOBLOCK: Sets the socket to be non-blocking, default is blocking
-    //  SWRAP_NODELAY: Disables Nagle's for TCP sockets, default is enabled
-    //char*: Host/address as a string, can be IPv4, IPv6, etc...
-    //char*: Service/port as a string, e.g. "1728" or "http"
-    //returns socket handle, or -1 on failure
+    //set up addrinfo hint
     struct addrinfo* result, hint = {
         (mode == SWRAP_BIND) ? AI_PASSIVE : 0, //ai_flags
         AF_UNSPEC, //ai_family
@@ -168,7 +191,6 @@ SWDEF int swrapSocket (int prot, int mode, char flags, const char* host, const c
     return sock;
 }
 SWDEF void swrapClose (int sock) {
-    //closes the given socket
     #ifdef _WIN32
         closesocket(sock);
     #else
@@ -176,7 +198,6 @@ SWDEF void swrapClose (int sock) {
     #endif
 }
 SWDEF void swrapTerminate () {
-    //terminates socket functionality
     #ifdef _WIN32
         WSACleanup();
     #endif
@@ -184,13 +205,9 @@ SWDEF void swrapTerminate () {
 
 //connection functions
 SWDEF int swrapListen (int sock, int blog) {
-    //configures the given socket (must be SWRAP_TCP + SWRAP_BIND) to listen for new connections with given maximum backlog
-    //returns 0 on success, non-zero on failure
     return listen(sock, blog);
 }
 SWDEF int swrapAccept (int sock, struct swrap_addr* addr) {
-    //uses the given socket (must be swrapListen) to accept a new incoming connection, optionally returning its address
-    //returns a socket handle for the new connection, or -1 on failure (e.g. if there are no new connections)
     #ifdef _WIN32
         int addr_size = sizeof(struct swrap_addr);
         SOCKET wsck = accept(sock, (struct sockaddr*)addr, (addr) ? &addr_size : NULL);
@@ -210,8 +227,6 @@ SWDEF int swrapAccept (int sock, struct swrap_addr* addr) {
 
 //address functions
 SWDEF int swrapAddress (int sock, struct swrap_addr* addr) {
-    //writes the address the given socket is bound to into given address pointer, useful when automatically assigning port
-    //returns 0 on success, non-zero on failure
     #ifdef _WIN32
         int addr_size = sizeof(struct swrap_addr);
     #else
@@ -220,30 +235,20 @@ SWDEF int swrapAddress (int sock, struct swrap_addr* addr) {
     return getsockname(sock, (struct sockaddr*)addr, &addr_size);
 }
 SWDEF int swrapAddressInfo (struct swrap_addr* addr, char* host, int host_size, char* serv, int serv_size) {
-    //writes the host/address and service/port of given address into given buffers (pointer + size), either buffer may be NULL
-    //returns 0 on success, non-zero on failure
     return getnameinfo((struct sockaddr*)addr, sizeof(struct swrap_addr), host, host_size, serv, serv_size, 0);
 }
 
 //send/receive functions
 SWDEF int swrapSend (int sock, const char* data, int data_size) {
-    //uses the given socket (either SWRAP_CONNECT or returned by swrapAccept) to send given data (pointer + size)
-    //returns how much data was actually sent (may be less than data size), or -1 on failure
     return send(sock, data, data_size, 0);
 }
 SWDEF int swrapReceive (int sock, char* data, int data_size) {
-    //receives data using given socket (either SWRAP_CONNECT or returned by swrapAccept) into given buffer (pointer + size)
-    //returns the number of bytes received, 0 on orderly shutdown, or -1 on failure (e.g. no data to receive)
     return recv(sock, data, data_size, 0);
 }
 SWDEF int swrapSendTo (int sock, struct swrap_addr* addr, const char* data, int data_size) {
-    //uses the given socket to send given data (pointer + size) to the given swrap_addr (e.g. from swrapReceiveFrom)
-    //returns how much data was actually sent (may be less than data size), or -1 on failure
     return sendto(sock, data, data_size, 0, (struct sockaddr*)addr, sizeof(struct swrap_addr));
 }
 SWDEF int swrapReceiveFrom (int sock, struct swrap_addr* addr, char* data, int data_size) {
-    //receives data using given socket into given buffer (pointer + size), optionally returning sender's address
-    //returns the number of bytes received, 0 on orderly shutdown, or -1 on failure (e.g. no data to receive)
     #ifdef _WIN32
         int addr_size = sizeof(struct swrap_addr);
     #else
@@ -254,9 +259,6 @@ SWDEF int swrapReceiveFrom (int sock, struct swrap_addr* addr, char* data, int d
 
 //select functions
 SWDEF int swrapSelect (int sock, double timeout) {
-    //waits either until given socket has new data to receive or given time (in seconds) has passed
-    //if given socket is -1 an empty select will be performed, which is just a sub-second sleep
-    //returns 1 if new data is available, 0 if timeout was reached, and -1 on error
     fd_set set; struct timeval time;
     //fd set
     FD_ZERO(&set);
@@ -268,9 +270,6 @@ SWDEF int swrapSelect (int sock, double timeout) {
     return select(sock+1, &set, NULL, NULL, &time);
 }
 SWDEF int swrapMultiSelect (int* socks, int socks_size, double timeout) {
-    //waits either until a socket in given list has new data to receive or given time (in seconds) has passed
-    //if the given list length is 0 an empty select will be performed, which is just a sub-second sleep
-    //returns 1 or more if new data is available, 0 if timeout was reached, and -1 on error
     fd_set set; struct timeval time; int sock_max = -1;
     //fd set
     FD_ZERO(&set);
