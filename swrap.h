@@ -1,5 +1,5 @@
 /*
-swrap.h - Portable, protocol-agnostic TCP and UDP socket wrapper, primarily designed for client-server models in applications such as games
+swrap.h - Portable, single-file, protocol-agnostic TCP and UDP socket wrapper, primarily for game networking
 
 To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring
 rights to this software to the public domain worldwide. This software is distributed without any warranty.
