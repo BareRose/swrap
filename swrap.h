@@ -22,7 +22,7 @@ swrap notes:
     therefore at least a basic understanding of the socket API is strongly recommended for anyone using swrap.
 */
 
-//include only once
+//header section
 #ifndef SWRAP_H
 #define SWRAP_H
 
@@ -103,8 +103,11 @@ SWDEF int swrapMultiSelect(int*, int, double);
     //if the given list length is 0 an empty select will be performed, which is just a sub-second sleep
     //returns 1 or more if new data is available, 0 if timeout was reached, and -1 on error
 
+#endif //SWRAP_H
+
 //implementation section
 #ifdef SWRAP_IMPLEMENTATION
+#undef SWRAP_IMPLEMENTATION
 
 //includes
 #ifdef _WIN32 //windows
@@ -285,4 +288,3 @@ SWDEF int swrapMultiSelect (int* socks, int socks_size, double timeout) {
 }
 
 #endif //SWRAP_IMPLEMENTATION
-#endif //SWRAP_H
