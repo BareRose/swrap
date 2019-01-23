@@ -156,12 +156,20 @@ SWDEF int swrapSocket (int prot, int mode, char flags, const char* host, const c
     //make sure IPV6_ONLY is disabled
     if (result->ai_family == AF_INET6) {
         int no = 0;
-        setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (void*)&no, sizeof(no));
+        #ifdef _WIN32
+            setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&no, sizeof(no));
+        #else
+            setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (void*)&no, sizeof(no));
+        #endif
     }
     //set TCP_NODELAY if applicable
     if (prot == SWRAP_TCP) {
         int nodelay = (flags&SWRAP_NODELAY);
-        setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (void*)&nodelay, sizeof(nodelay));
+        #ifdef _WIN32
+            setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char*)&nodelay, sizeof(nodelay));
+        #else
+            setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (void*)&nodelay, sizeof(nodelay));
+        #endif
     }
     //bind if applicable
     if ((mode == SWRAP_BIND)&&(bind(sock, result->ai_addr, result->ai_addrlen))) {
