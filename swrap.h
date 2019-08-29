@@ -114,11 +114,13 @@ SWDEF int swrapMultiSelect(int*, int, double);
     #include <ws2tcpip.h>
 #else //unix
     #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <netinet/tcp.h>
     #include <netdb.h>
     #include <fcntl.h>
     #include <unistd.h>
+    #ifndef TCP_NODELAY
+        #include <netinet/in.h>
+        #include <netinet/tcp.h>
+    #endif
 #endif
 #include <stddef.h> //NULL
 
